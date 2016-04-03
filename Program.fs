@@ -1,21 +1,8 @@
 ﻿//[2016-03-28] Challenge #260 [Easy] Garage Door Opener
 
-//You just got a new garage door installed by the Automata™ Garage Door Company. 
-//You are having a lot of fun playing with the remote clicker, 
-//opening and closing the door, scaring your pets and annoying the neighbors.
-//The clicker is a one-button remote that works like this:
-//If the door is OPEN or CLOSED, clicking the button will cause the door to move,
-// until it completes the cycle of opening or closing.
-//Door: 
-//Closed -> Button clicked -> 
-//Door: Opening -> Cycle complete 
-//-> Door: Open.
-//If the door is currently opening or closing, clicking the button will make the 
-//door stop where it is. When clicked again, the door will go the opposite
-// direction, until complete or the button is clicked again.
-
 //We will assume the initial state is CLOSED
-type GarageStatus = | Open | Closed | Opening | Closing | StoppedClosing | StoppedOpening
+// Undefined states not defined in the challenge will throw a runtime error.
+type GarageStatus = | Open | Closed | Opening | Closing | StoppedClosing | StoppedOpening | EmergencyOpening | OpenBlocked
 
 let ClickButton gs =
     match gs with
@@ -28,11 +15,16 @@ let FinishCycle gs =
     match gs with
     | Opening ->  GarageStatus.Open
     | Closing ->  GarageStatus.Closed
+    | EmergencyOpening -> GarageStatus.OpenBlocked
 
 let InputGarageCommand gs cmd = 
     match cmd with
-    | "button_clicked" -> ClickButton gs
+    | "button_clicked" -> match gs with
+                          | EmergencyOpening | OpenBlocked -> gs
+                          |_ -> ClickButton gs
     | "cycle_complete" -> FinishCycle  gs
+    | "block_detected" -> GarageStatus.EmergencyOpening
+    | "block_cleared"  -> GarageStatus.Open
 
 let printGarageStatus gs =
     match gs with
@@ -42,29 +34,41 @@ let printGarageStatus gs =
     | Closing -> printfn "Door: CLOSING"
     | StoppedClosing -> printfn "Door: STOPPED_WHILE_CLOSING"
     | StoppedOpening -> printfn "Door: STOPPED_WHILE_OPENING"
+    | EmergencyOpening -> printfn "Door: EMERGENCY_OPENING"
+    | OpenBlocked -> printfn "Door: OPEN_BLOCKED"
 
 let printGarageCommand (c:string) = 
     match c with
-    |"button_clicked" -> printfn "> Button clicked."
-    |"cycle_complete" -> printfn "> Cycle complete."
-    
-let handleCommands list gs =
-        let rec loop cmds gs =
-            match cmds with
-            |[] -> null
-            | head::tail -> 
-                printGarageCommand head
-                let ns = InputGarageCommand gs head
-                printGarageStatus ns
-                loop tail ns
+    | "button_clicked" -> printfn "> Button clicked."
+    | "cycle_complete" -> printfn "> Cycle complete."
+    | "block_detected" -> printfn "> Block detected!"
+    | "block_cleared"  -> printfn "> Block cleared"
+
+let handleCommands loopfn list gs =
         printGarageStatus gs
-        loop list gs
+        loopfn list gs
+
+let rec baseLoop cmds gs =
+    match cmds with
+    |[] -> null
+    | head::tail -> 
+        printGarageCommand head
+        let ns = InputGarageCommand gs head
+        printGarageStatus ns
+        baseLoop tail ns
 
 [<EntryPoint>]
 let main argv = 
     let commands = ["button_clicked"; "cycle_complete"; "button_clicked"; "button_clicked"; "button_clicked"; "button_clicked"; "button_clicked"; "cycle_complete"; ] 
-    handleCommands commands GarageStatus.Closed       
+    let bonusCommands = ["button_clicked";"cycle_complete";"button_clicked";"block_detected";"button_clicked";"cycle_complete";"button_clicked";"block_cleared";"button_clicked";"cycle_complete";]
+    handleCommands baseLoop commands GarageStatus.Closed       
     
+    printfn ""
+    System.Console.ReadKey() |> ignore
+    printfn "Bonus: "
+
+    
+    handleCommands baseLoop bonusCommands GarageStatus.Closed
     System.Console.ReadKey() |> ignore
     
     0 // return an integer exit code
